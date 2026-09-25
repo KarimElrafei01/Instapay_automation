@@ -902,7 +902,7 @@ Tests are required before changing matching rules. At minimum, Vitest unit/integ
 
 ## 15. Feature-first client/server architecture and separation of concerns
 
-The repository has two clearly separate applications: `apps/client` for the Next.js customer/owner experience and `apps/server` for the NestJS API and workers. Both applications organize code **by feature first**, not by a global technical layer. Every feature owns its presentation, data, and domain files, so a payment-attempt change is found in one place instead of spread across application-wide `controllers`, `repositories`, and `services` directories.
+The repository has three clearly separate applications: `apps/client` for the Next.js hosted checkout/web dashboard, `apps/mobile` for the full iOS/Android owner application, and `apps/server` for the NestJS API and workers. Each application organizes code **by feature first**, not by a global technical layer. Every feature owns its presentation, data, and domain files, so a payment-attempt change is found in one place instead of spread across application-wide `controllers`, `repositories`, and `services` directories.
 
 ```text
 apps/
@@ -916,6 +916,11 @@ apps/
       dashboard/                     owner metrics/exception feature
     src/app/                         thin Next.js route/layout boundary only
     src/shared/                      design system, HTTP client, config, safe common utilities
+
+  mobile/                           React Native owner app for iOS and Android
+    .gitkeep                         intentional placeholder; no implementation yet
+    src/features/                    future auth, stores, receiving-sources, attempts, reviews, dashboard
+    src/platform/                    thin native Android/iOS adapters only
 
   server/                           NestJS/Fastify API plus worker bootstrap
     src/features/
@@ -942,6 +947,8 @@ packages/
   contracts/                         versioned Zod HTTP/SSE/webhook/event contracts shared by client/server
   test-fixtures/                     sanitized screenshots, OCR, and bank-parser fixtures
 ```
+
+`apps/mobile` will be the complete owner client: passwordless auth, create/configure a store, register and inspect a trusted receiving source, payment-attempt list/detail, manual-review actions, and analytics. It is not a browser wrapper and it is not only an alert bridge. React Native owns the shared UI/data/domain feature layers; platform-specific adapter code stays thin under `src/platform`. Android owns its native notification/SMS ingestion adapter. iOS owns its supported Shortcut/native automation integration and must expose its capability state to the owner; it cannot be assumed to have the same background SMS/third-party-notification access or delivery reliability as Android. Both adapters send only device-authenticated, replay-protected events to the same server API.
 
 Do not place a Shopify embedded app or checkout extension inside `apps/client`. If/when a Shopify order-status/thank-you extension is shipped, add a separate `apps/shopify` deployment/package that contains only Shopify manifest, extension UI, and its thin calls to the server; it owns no matching logic, database access, platform credential, or payment decision.
 

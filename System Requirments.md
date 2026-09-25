@@ -10,6 +10,12 @@ It is checkout and reconciliation software. It does not initiate transfers, hold
 
 MVP has one role: **store owner**. The owner configures the store and receiving source, monitors outcomes, and resolves exception cases.
 
+## Owner mobile application
+
+The owner experience is available as a full iOS and Android mobile application alongside the web dashboard. It supports passwordless authentication, store and receiving-source setup, payment-attempt lists and details, manual-review handling, and dashboard analytics. The mobile app is a separate client from the hosted web checkout and shares only server contracts, never payment-decision logic or credentials.
+
+Android may use a native alert-ingestion adapter for a registered receiving source. iOS uses its own supported automation path and must report source capability/reliability separately; the server must not assume that iOS can capture SMS or third-party notifications in the same way as Android.
+
 ## MVP — must-have requirements
 
 ### 1. Store and receiving source
