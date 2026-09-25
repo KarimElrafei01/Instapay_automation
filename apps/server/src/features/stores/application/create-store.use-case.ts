@@ -56,3 +56,13 @@ export class CreateStoreUseCase {
     return { store, integrationSecret };
   }
 }
+
+/** Reads the authenticated owner's store without exposing its integration credentials. */
+@Injectable()
+export class GetOwnerStoreUseCase {
+  public constructor(@Inject(STORE_REPOSITORY) private readonly stores: StoreRepository) {}
+
+  public async execute(ownerId: string): Promise<Store | null> {
+    return this.stores.findByOwnerId(ownerId);
+  }
+}

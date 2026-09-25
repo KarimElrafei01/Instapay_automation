@@ -195,10 +195,11 @@ export const platformOrderLinks = pgTable("platform_order_links", {
 export const receivingSources = pgTable("receiving_sources", {
   id: uuid("id").primaryKey(),
   storeId: uuid("store_id").notNull().unique().references(() => stores.id, { onDelete: "restrict" }),
-  bankCode: varchar("bank_code", { length: 40 }).notNull(),
+  bankName: varchar("bank_name", { length: 120 }).notNull(),
   accountLabelEncrypted: bytea("account_label_encrypted").notNull(),
   maskedAccountSuffixEncrypted: bytea("masked_account_suffix_encrypted"),
-  inputKind: varchar("input_kind", { length: 20 }).notNull(),
+  selectedChannels: text("selected_channels").array().notNull(),
+  channelVerification: jsonb("channel_verification").$type<Record<string, { status: string; verifiedAt: string | null; lastFailureCode: string | null }>>().notNull().default({}),
   allowedIdentityNormalized: varchar("allowed_identity_normalized", { length: 200 }).notNull(),
   status: sourceStatus("status").notNull().default("pending_verification"),
   deviceId: uuid("device_id").notNull().unique(),
@@ -208,13 +209,15 @@ export const receivingSources = pgTable("receiving_sources", {
   deviceSigningKeyEncrypted: bytea("device_signing_key_encrypted").notNull(),
   testExpiresAt: timestamp("test_expires_at", { withTimezone: true }),
   testAlertEventId: uuid("test_alert_event_id"),
+  testProofStorageKey: varchar("test_proof_storage_key", { length: 512 }),
+  testProofFactsEncrypted: bytea("test_proof_facts_encrypted"),
   verifiedAt: timestamp("verified_at", { withTimezone: true }),
   lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
-  check("receiving_sources_input_kind_check", sql`${table.inputKind} in ('sms', 'notification')`),
+  check("receiving_sources_selected_channels_check", sql`cardinality(${table.selectedChannels}) between 1 and 2 and ${table.selectedChannels} <@ ARRAY['sms', 'notification']::text[]`),
 ]);
 
 export const alertEvents = pgTable("alert_events", {
