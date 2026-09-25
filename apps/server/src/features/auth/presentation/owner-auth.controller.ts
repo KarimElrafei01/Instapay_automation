@@ -96,12 +96,22 @@ export class OwnerAuthController {
   }
 
   @Get("me")
-  public async me(@Req() request: FastifyRequest): Promise<{ data: { owner: ReturnType<typeof ownerProjection> } }> {
-    const owner = await this.getCurrentOwner.execute(request.cookies[sessionCookieName]);
-    if (!owner || owner.disabledAt) {
+  public async me(
+    @Req() request: FastifyRequest,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<{ data: { owner: ReturnType<typeof ownerProjection> } }> {
+    const currentOwner = await this.getCurrentOwner.execute(request.cookies[sessionCookieName]);
+    if (!currentOwner || currentOwner.owner.disabledAt) {
       throw new UnauthorizedException({ code: "UNAUTHENTICATED" });
     }
-    return { data: { owner: ownerProjection(owner) } };
+    reply.setCookie(sessionCookieName, currentOwner.session.token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV !== "development",
+      sameSite: "lax",
+      path: "/",
+      expires: currentOwner.session.expiresAt,
+    });
+    return { data: { owner: ownerProjection(currentOwner.owner) } };
   }
 
   @Post("sign-out")

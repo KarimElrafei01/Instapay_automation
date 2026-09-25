@@ -40,6 +40,7 @@ export interface OwnerRepository {
 export interface OwnerSessionRepository {
   create(ownerId: string): Promise<OwnerSession>;
   findByToken(token: string): Promise<OwnerSession | null>;
+  renew(token: string): Promise<OwnerSession | null>;
   revoke(token: string): Promise<void>;
 }
 

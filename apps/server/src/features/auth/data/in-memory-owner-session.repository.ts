@@ -3,7 +3,7 @@ import type { OwnerSession, OwnerSessionRepository } from "../domain/ports.js";
 
 export class InMemoryOwnerSessionRepository implements OwnerSessionRepository {
   private readonly sessions = new Map<string, OwnerSession>();
-  private readonly expiresInMs = 24 * 60 * 60 * 1_000;
+  private readonly expiresInMs = 72 * 60 * 60 * 1_000;
 
   public async create(ownerId: string): Promise<OwnerSession> {
     const session: OwnerSession = {
@@ -25,6 +25,20 @@ export class InMemoryOwnerSessionRepository implements OwnerSessionRepository {
       return null;
     }
     return session;
+  }
+
+  public async renew(token: string): Promise<OwnerSession | null> {
+    const session = await this.findByToken(token);
+    if (!session) {
+      return null;
+    }
+
+    const renewedSession: OwnerSession = {
+      ...session,
+      expiresAt: new Date(Date.now() + this.expiresInMs),
+    };
+    this.sessions.set(token, renewedSession);
+    return renewedSession;
   }
 
   public async revoke(token: string): Promise<void> {
