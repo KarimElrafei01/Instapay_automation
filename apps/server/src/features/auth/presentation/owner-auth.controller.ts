@@ -24,8 +24,11 @@ import {
 } from "../domain/errors.js";
 import { InvalidPhoneNumberError } from "../domain/phone.js";
 import type { Owner } from "../domain/ports.js";
+import {
+  OWNER_SESSION_COOKIE_NAME,
+  refreshOwnerSessionCookie,
+} from "./owner-session-cookie.js";
 
-const sessionCookieName = "instapay_owner_session";
 const requestOtpSchema = z.object({
   phoneNumber: z.string().min(1).max(32),
   purpose: z.enum(["sign_up", "sign_in"]),
@@ -76,13 +79,7 @@ export class OwnerAuthController {
     const input = parseRequest(verifyOtpSchema, body);
     try {
       const result = await this.verifyOwnerOtp.execute(input);
-      reply.setCookie(sessionCookieName, result.session.token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV !== "development",
-        sameSite: "lax",
-        path: "/",
-        expires: result.session.expiresAt,
-      });
+      refreshOwnerSessionCookie(reply, result.session);
       return { data: { owner: ownerProjection(result.owner) } };
     } catch (error) {
       if (error instanceof OwnerAlreadyExistsError) {
@@ -100,17 +97,11 @@ export class OwnerAuthController {
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<{ data: { owner: ReturnType<typeof ownerProjection> } }> {
-    const currentOwner = await this.getCurrentOwner.execute(request.cookies[sessionCookieName]);
+    const currentOwner = await this.getCurrentOwner.execute(request.cookies[OWNER_SESSION_COOKIE_NAME]);
     if (!currentOwner || currentOwner.owner.disabledAt) {
       throw new UnauthorizedException({ code: "UNAUTHENTICATED" });
     }
-    reply.setCookie(sessionCookieName, currentOwner.session.token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV !== "development",
-      sameSite: "lax",
-      path: "/",
-      expires: currentOwner.session.expiresAt,
-    });
+    refreshOwnerSessionCookie(reply, currentOwner.session);
     return { data: { owner: ownerProjection(currentOwner.owner) } };
   }
 
@@ -120,8 +111,8 @@ export class OwnerAuthController {
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<void> {
-    await this.signOutOwner.execute(request.cookies[sessionCookieName]);
-    reply.clearCookie(sessionCookieName, { httpOnly: true, path: "/" });
+    await this.signOutOwner.execute(request.cookies[OWNER_SESSION_COOKIE_NAME]);
+    reply.clearCookie(OWNER_SESSION_COOKIE_NAME, { httpOnly: true, path: "/" });
   }
 }
 

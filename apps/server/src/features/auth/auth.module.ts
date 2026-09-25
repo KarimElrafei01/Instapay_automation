@@ -24,5 +24,6 @@ import { OwnerAuthController } from "./presentation/owner-auth.controller.js";
     { provide: OWNER_REPOSITORY, useFactory: () => new InMemoryOwnerRepository() },
     { provide: OWNER_SESSION_REPOSITORY, useFactory: () => new InMemoryOwnerSessionRepository() },
   ],
+  exports: [GetCurrentOwnerUseCase],
 })
 export class AuthModule {}
