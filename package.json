@@ -1,0 +1,36 @@
+{
+  "name": "automated-instapay-checkout",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@12.3.4",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=12.0.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "dev:client": "pnpm --filter @instapay/client dev",
+    "dev:server": "pnpm --filter @instapay/server dev",
+    "dev:worker": "pnpm --filter @instapay/server dev:worker",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "db:generate": "pnpm --filter @instapay/server db:generate",
+    "db:migrate": "pnpm --filter @instapay/server db:migrate",
+    "db:studio": "pnpm --filter @instapay/server db:studio"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.63.0",
+    "@types/node": "26.6.2",
+    "@vitest/coverage-v8": "5.0.1",
+    "eslint": "10.11.0",
+    "prettier": "3.9.9",
+    "tsx": "4.23.15",
+    "turbo": "2.11.3",
+    "typescript": "7.0.2",
+    "typescript-eslint": "8.70.1",
+    "vitest": "5.0.1"
+  }
+}

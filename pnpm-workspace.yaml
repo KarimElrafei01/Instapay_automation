@@ -1,0 +1,16 @@
+packages:
+  - apps/*
+  - packages/*
+
+overrides:
+  esbuild: 0.25.12
+
+# pnpm blocks lifecycle scripts by default. These two packages are required
+# for the development toolchain/password-hashing adapter and are explicitly
+# reviewed before being permitted to run their install scripts.
+allowBuilds:
+  esbuild: true
+  argon2: true
+  "@scarf/scarf": false
+  msgpackr-extract: false
+  protobufjs: false
