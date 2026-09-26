@@ -17,8 +17,8 @@ Last updated: 2026-09-26
 
 ## In Progress
 
-- Branch: `feat/http-security-observability`
-- HTTP security and observability are implemented on this feature branch; no merge into `main` is authorized.
+- Branch: `feat/hosted-checkout-proof-submission`
+- Hosted checkout and proof submission are in progress: a merchant-authenticated API creates a durable checkout session, while the customer screenshot submission is the only operation that creates a payment attempt. No merge into `main` is authorized.
 
 ## Verification
 
@@ -32,4 +32,5 @@ Last updated: 2026-09-26
 
 - Configure an approved database and encryption-key source for a shared or production environment.
 - Wire the existing in-memory receiving-source adapter to PostgreSQL/S3/BullMQ before deployment; live test screenshots require `AZURE_VISION_ENDPOINT` and `AZURE_VISION_KEY`.
+- Configure the private S3-compatible bucket, its server-side encryption and lifecycle policy, and `HOSTED_CHECKOUT_ORIGIN` before accepting live checkout proofs.
 - Iteration 2: support multiple stores sharing an IPA through a shared receiving-source model and cross-store, uniqueness-only matching.

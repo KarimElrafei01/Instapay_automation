@@ -142,10 +142,39 @@ export const platformConnections = pgTable("platform_connections", {
     .where(sql`${table.platform} = 'shopify' and ${table.externalAccountDomain} is not null`),
 ]);
 
+export const checkoutSessionStatus = pgEnum("checkout_session_status", ["active", "submitted", "expired"]);
+
+export const hostedCheckoutSessions = pgTable("hosted_checkout_sessions", {
+  id: uuid("id").primaryKey(),
+  publicId: varchar("public_id", { length: 40 }).notNull().unique(),
+  storeId: uuid("store_id").notNull().references(() => stores.id, { onDelete: "restrict" }),
+  merchantOrderId: varchar("merchant_order_id", { length: 128 }).notNull(),
+  orderReference: varchar("order_reference", { length: 100 }).notNull(),
+  amountMinor: integer("amount_minor").notNull(),
+  currency: char("currency", { length: 3 }).notNull().default("EGP"),
+  checkoutTokenHash: bytea("checkout_token_hash").notNull().unique(),
+  recipientIpaSnapshot: varchar("recipient_ipa_snapshot", { length: 160 }).notNull(),
+  accountHolderNameSnapshot: varchar("account_holder_name_snapshot", { length: 160 }).notNull(),
+  webhookUrlSnapshotEncrypted: bytea("webhook_url_snapshot_encrypted").notNull(),
+  matchingWindowMinutesSnapshot: smallint("matching_window_minutes_snapshot").notNull(),
+  status: checkoutSessionStatus("status").notNull().default("active"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  submittedAt: timestamp("submitted_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("hosted_checkout_sessions_store_merchant_order_unique").on(table.storeId, table.merchantOrderId),
+  index("hosted_checkout_sessions_public_active_idx").on(table.publicId, table.status, table.expiresAt),
+  check("hosted_checkout_sessions_amount_minor_check", sql`${table.amountMinor} between 100 and 10000000`),
+  check("hosted_checkout_sessions_currency_check", sql`${table.currency} = 'EGP'`),
+  check("hosted_checkout_sessions_expires_after_created_check", sql`${table.expiresAt} > ${table.createdAt}`),
+]);
+
 export const paymentAttempts = pgTable("payment_attempts", {
   id: uuid("id").primaryKey(),
   publicId: varchar("public_id", { length: 40 }).notNull().unique(),
   storeId: uuid("store_id").notNull().references(() => stores.id, { onDelete: "restrict" }),
+  checkoutSessionId: uuid("checkout_session_id").notNull().unique().references(() => hostedCheckoutSessions.id, { onDelete: "restrict" }),
   merchantOrderId: varchar("merchant_order_id", { length: 128 }).notNull(),
   orderReference: varchar("order_reference", { length: 100 }).notNull(),
   customerReferenceEncrypted: bytea("customer_reference_encrypted"),
@@ -181,6 +210,7 @@ export const paymentAttempts = pgTable("payment_attempts", {
   check("payment_attempts_amount_minor_check", sql`${table.amountMinor} between 100 and 10000000`),
   check("payment_attempts_currency_check", sql`${table.currency} = 'EGP'`),
   check("payment_attempts_expires_after_created_check", sql`${table.expiresAt} > ${table.createdAt}`),
+  check("payment_attempts_submitted_proof_check", sql`${table.proofSubmittedAt} is not null and ${table.proofStorageKey} is not null and ${table.proofInputSha256} is not null and ${table.proofCanonicalSha256} is not null and ${table.proofRetentionDeleteAt} is not null and ${table.proofState} in ('uploaded', 'scanning', 'clean', 'canonicalizing', 'extracting', 'extracted', 'unreadable', 'malicious', 'corrupt', 'superseded', 'deleted')`),
 ]);
 
 export const platformOrderLinks = pgTable("platform_order_links", {

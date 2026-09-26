@@ -13,7 +13,7 @@ There is one role: **store owner**.
 The MVP contains:
 
 1. Store owner authentication, store profile, IPA configuration, and one verified receiving bank-alert source.
-2. Server-side payment-attempt creation from a merchant website.
+2. Server-side hosted-checkout-session creation from a merchant website. This records payment instructions, not a payment attempt.
 3. Hosted payment page with merchant IPA/share link/QR, exact amount, and required screenshot upload.
 4. Trusted bank SMS/alert ingestion from a registered merchant device.
 5. OCR/AI field extraction for Arabic and English screenshots.
@@ -43,9 +43,10 @@ Prefer managed PostgreSQL, Redis, and object storage during the pilot. Keep inte
 
 ```text
 Merchant server creates unpaid local order
-→ Merchant server creates payment attempt through API
-→ Customer redirects to hosted payment page
+→ Merchant server creates a server-owned hosted checkout session with the exact amount and recipient IPA
+→ Customer redirects to hosted payment page; no payment attempt exists yet
 → Customer pays in InstaPay and uploads screenshot
+→ Customer submits the hosted payment form; this creates the payment attempt and its proof record atomically
 → Registered device forwards eligible bank credit alert
 → OCR/parser extracts evidence
 → Deterministic matching engine evaluates one-to-one match
@@ -101,6 +102,7 @@ Only matching/decision services may transition an attempt to `automatically_appr
 - Browser clients never choose store ID, final amount, payment status, decision, or owner identity. Derive server-owned state from authenticated records.
 - Use opaque, unguessable payment-attempt IDs.
 - Signed screenshot uploads must be scoped to one attempt, short-lived, type/size constrained, malware scanned, and private.
+- A hosted checkout session, not a payment attempt, is created before the customer pays. A payment attempt is created only when the customer submits the hosted payment form with a screenshot. The screenshot is mandatory and must be created/persisted with the attempt before it enters `awaiting_bank_alert` or may be automatically approved. At submission, validate an allowlisted image type and file signature, byte length, width, height, and total pixel bounds before decoding or processing. Re-encode it through a bounded, OCR-preserving compression pipeline, then upload only to an attempt-scoped key in the private object-store bucket. Persist the storage key, content hash, and compact encrypted extraction facts—not original image bytes or raw OCR text—and process/scan it asynchronously.
 - Issue a unique, revocable device credential per receiving source. Apply timestamp freshness, replay protection, event idempotency, and rate limits.
 - Sign webhook payloads. Include timestamp and delivery ID. Merchant callback retries must be safe and idempotent.
 - Encrypt evidence and credentials at rest; use TLS in transit.
@@ -115,6 +117,7 @@ Only matching/decision services may transition an attempt to `automatically_appr
 - Keep matching, authorization, parsing, OCR, and webhook verification as separate services/modules.
 - Make background jobs idempotent and retry-safe. Use deterministic idempotency keys.
 - Use parameterized database queries and explicit transactions around event allocation and payment approval.
+- Every production feature must persist its authoritative state through PostgreSQL/Drizzle in the same change. Do not ship domain-only or in-memory production implementations; in-memory fakes are allowed only inside tests.
 - Return generic public errors; retain detailed diagnostic context only in secure structured logs.
 - Add tests before changing matching rules. Cover same-amount concurrency, duplicate alerts, late alerts, and mismatching screenshot/SMS evidence.
 - Preserve existing user work. Never hard-reset, discard changes, or expose secrets.

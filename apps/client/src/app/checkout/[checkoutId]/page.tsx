@@ -1,0 +1,17 @@
+"use client";
+
+import { ChangeEvent, FormEvent, useEffect, useState } from "react";
+
+type Checkout = { checkoutId: string; amountMinor: number; currency: "EGP"; recipientIpa: string; accountHolderName: string; expiresAt: string };
+const apiOrigin = process.env.NEXT_PUBLIC_API_ORIGIN ?? "http://localhost:3001";
+
+export default function HostedCheckoutPage({ params }: { params: Promise<{ checkoutId: string }> }) {
+  const [checkoutId, setCheckoutId] = useState<string>(); const [token, setToken] = useState<string>(); const [checkout, setCheckout] = useState<Checkout>(); const [image, setImage] = useState<{ mediaType: string; base64: string }>(); const [message, setMessage] = useState("Loading payment instructions…");
+  useEffect(() => { void params.then(({ checkoutId: id }) => { const fragment = new URLSearchParams(window.location.hash.slice(1)); const checkoutToken = fragment.get("token"); if (!checkoutToken) { setMessage("This checkout link is invalid."); return; } window.history.replaceState(null, "", window.location.pathname); setCheckoutId(id); setToken(checkoutToken); void fetch(`${apiOrigin}/v1/checkout-sessions/${id}`, { headers: { "x-checkout-token": checkoutToken } }).then(async (response) => response.ok ? response.json() as Promise<{ data: Checkout }> : Promise.reject()).then(({ data }) => { setCheckout(data); setMessage(""); }).catch(() => setMessage("This checkout is invalid or has expired.")); }); }, [params]);
+  async function selectImage(event: ChangeEvent<HTMLInputElement>) { const file = event.target.files?.[0]; if (!file || !["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size < 1_024 || file.size > 5 * 1024 * 1024) { setMessage("Choose a JPEG, PNG, or WebP screenshot between 1 KB and 5 MB."); return; } const base64 = await readBase64(file); setImage({ mediaType: file.type, base64 }); setMessage(""); }
+  async function submit(event: FormEvent) { event.preventDefault(); if (!checkoutId || !token || !image) return; setMessage("Validating your screenshot…"); const response = await fetch(`${apiOrigin}/v1/checkout-sessions/${checkoutId}/proof`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ checkoutToken: token, mediaType: image.mediaType, imageBase64: image.base64 }) }); setMessage(response.ok ? "Your proof was submitted. We are waiting for the merchant’s bank alert." : "We could not accept that proof. Please use the actual payment screenshot and try again."); }
+  if (!checkout) return <main><p>{message}</p></main>;
+  return <main><h1>Pay with InstaPay</h1><p>Transfer exactly <strong>{formatEgp(checkout.amountMinor)}</strong> to:</p><p><strong>{checkout.accountHolderName}</strong><br />{checkout.recipientIpa}</p><p>Then upload the successful-transfer screenshot and submit it below. Do not upload bank messages or credentials.</p><form onSubmit={submit}><input type="file" accept="image/jpeg,image/png,image/webp" onChange={selectImage} required /><button type="submit" disabled={!image}>Submit payment proof</button></form><p>{message}</p></main>;
+}
+function formatEgp(amountMinor: number): string { return new Intl.NumberFormat("en-EG", { style: "currency", currency: "EGP" }).format(amountMinor / 100); }
+async function readBase64(file: File): Promise<string> { const data = await file.arrayBuffer(); let binary = ""; for (const byte of new Uint8Array(data)) binary += String.fromCharCode(byte); return btoa(binary); }
