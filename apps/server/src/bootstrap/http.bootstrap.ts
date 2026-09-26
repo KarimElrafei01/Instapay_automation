@@ -9,6 +9,7 @@ import rateLimit from "@fastify/rate-limit";
 import { randomUUID } from "node:crypto";
 import { Logger as PinoNestLogger, LoggerModule } from "nestjs-pino";
 import { AuthModule } from "../features/auth/auth.module.js";
+import { PaymentAttemptsModule } from "../features/payment-attempts/payment-attempts.module.js";
 import { StoresModule } from "../features/stores/stores.module.js";
 import { ReceivingSourcesModule } from "../features/receiving-sources/receiving-sources.module.js";
 import { CryptoModule } from "../shared/crypto/crypto.module.js";
@@ -42,7 +43,7 @@ import { PlatformEventLogger } from "../shared/observability/platform-event-logg
           res: (response) => ({ statusCode: response.statusCode }),
         },
         redact: {
-          paths: ["req.headers.authorization", "req.headers.cookie", "req.headers.x-csrf-token", "res.headers.set-cookie"],
+          paths: ["req.headers.authorization", "req.headers.cookie", "req.headers.x-csrf-token", "req.headers.x-checkout-token", "res.headers.set-cookie"],
           remove: true,
         },
       },
@@ -52,6 +53,7 @@ import { PlatformEventLogger } from "../shared/observability/platform-event-logg
     CryptoModule,
     HttpSecurityModule,
     AuthModule,
+    PaymentAttemptsModule,
     StoresModule,
     ReceivingSourcesModule,
   ],
