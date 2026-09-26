@@ -1,6 +1,7 @@
 export const RECEIVING_SOURCE_REPOSITORY = Symbol("RECEIVING_SOURCE_REPOSITORY");
 export const DEVICE_CREDENTIAL_ISSUER = Symbol("DEVICE_CREDENTIAL_ISSUER");
 export const TEST_PROOF_OCR = Symbol("TEST_PROOF_OCR");
+export const RECEIVING_SOURCE_PROOF_STORAGE = Symbol("RECEIVING_SOURCE_PROOF_STORAGE");
 
 export type ReceivingChannel = "sms" | "notification";
 export type ChannelVerificationStatus = "awaiting_test" | "verified" | "failed";
@@ -15,8 +16,7 @@ export type ChannelVerification = {
 
 export type TestProof = {
   mediaType: "image/jpeg" | "image/png" | "image/webp";
-  bytes: Uint8Array;
-  extractedText: string;
+  storageKey: string;
   amountMinor: number | null;
   recipientMatched: boolean;
   indicatesSuccess: boolean;
@@ -58,7 +58,6 @@ export type StoredReceivingSource = ReceivingSource & {
   deviceCredentialHash: string;
   deviceCredentialPrefix: string;
   deviceSigningKey: string;
-  processedEventIds: Set<string>;
 };
 
 export type CreateReceivingSourceInput = {
@@ -93,6 +92,8 @@ export interface ReceivingSourceRepository {
   findByIdForOwner(id: string, ownerId: string): Promise<ReceivingSource | null>;
   findStoredById(id: string): Promise<StoredReceivingSource | null>;
   save(source: StoredReceivingSource): Promise<ReceivingSource>;
+  recordTestAlert(source: StoredReceivingSource, alert: ParsedTestAlert): Promise<ReceivingSource>;
+  recordLiveAlert(source: StoredReceivingSource, alert: ParsedTestAlert): Promise<string>;
 }
 
 export interface DeviceCredentialIssuer {
@@ -102,4 +103,8 @@ export interface DeviceCredentialIssuer {
 
 export interface TestProofOcr {
   extract(input: { bytes: Uint8Array; mediaType: TestProof["mediaType"] }): Promise<OcrTestProofResult>;
+}
+
+export interface ReceivingSourceProofStorage {
+  put(input: { key: string; body: Uint8Array; contentType: TestProof["mediaType"] }): Promise<void>;
 }

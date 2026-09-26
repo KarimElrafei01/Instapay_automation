@@ -6,7 +6,7 @@ import {
 } from "./receiving-source.use-cases.js";
 import { InMemoryReceivingSourceRepository } from "../data/in-memory-receiving-source.repository.js";
 import { canonicalDeviceAlertPayload, signatureFor } from "../domain/receiving-source-input.js";
-import type { DeviceCredentialIssuer, TestProofOcr } from "../domain/ports.js";
+import type { DeviceCredentialIssuer, ReceivingSourceProofStorage, TestProofOcr } from "../domain/ports.js";
 import { DuplicateDeviceEventError, InvalidDeviceSignatureError } from "../domain/errors.js";
 
 const credentials: DeviceCredentialIssuer = {
@@ -16,12 +16,13 @@ const credentials: DeviceCredentialIssuer = {
 const readableProofOcr: TestProofOcr = {
   extract: async () => ({ text: "Successful transfer 25.00 EGP merchant@instapay", amountMinor: 2_500, indicatesSuccess: true }),
 };
+const proofStorage: ReceivingSourceProofStorage = { put: async () => undefined };
 
 describe("receiving-source verification", () => {
   it("activates after one selected channel verifies and leaves the other channel pending", async () => {
     const repository = new InMemoryReceivingSourceRepository();
     const create = new CreateReceivingSourceUseCase(repository, credentials);
-    const upload = new SubmitTestProofUseCase(repository, readableProofOcr);
+    const upload = new SubmitTestProofUseCase(repository, readableProofOcr, proofStorage);
     const ingest = new IngestDeviceTestAlertUseCase(repository, credentials);
     const created = await create.execute({ ownerId: "owner", storeId: "store", ipa: "merchant@instapay", bankName: "Bank Alert", selectedChannels: ["sms", "notification"], devicePlatform: "android" });
     await upload.execute({ ownerId: "owner", sourceId: created.source.id, mediaType: "image/png", bytes: new Uint8Array(32) });
@@ -39,7 +40,7 @@ describe("receiving-source verification", () => {
   it("does not activate when the screenshot and trusted alert disagree", async () => {
     const repository = new InMemoryReceivingSourceRepository();
     const create = new CreateReceivingSourceUseCase(repository, credentials);
-    const upload = new SubmitTestProofUseCase(repository, readableProofOcr);
+    const upload = new SubmitTestProofUseCase(repository, readableProofOcr, proofStorage);
     const ingest = new IngestDeviceTestAlertUseCase(repository, credentials);
     const created = await create.execute({ ownerId: "owner", storeId: "store", ipa: "merchant@instapay", bankName: "Bank Alert", selectedChannels: ["sms"], devicePlatform: "android" });
     await upload.execute({ ownerId: "owner", sourceId: created.source.id, mediaType: "image/png", bytes: new Uint8Array(32) });

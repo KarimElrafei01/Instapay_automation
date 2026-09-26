@@ -36,6 +36,13 @@
       "when": 1790420000002,
       "tag": "0004_hosted_checkout_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790420000003,
+      "tag": "0005_alert_event_ingestion_channel",
+      "breakpoints": true
     }
   ]
 }

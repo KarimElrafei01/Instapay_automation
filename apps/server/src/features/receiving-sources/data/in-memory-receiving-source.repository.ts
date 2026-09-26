@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { ReceivingSourceAlreadyExistsError } from "../domain/errors.js";
+import { DuplicateDeviceEventError, ReceivingSourceAlreadyExistsError } from "../domain/errors.js";
 import type {
   CreateReceivingSourceInput,
+  ParsedTestAlert,
   ReceivingSource,
   ReceivingSourceRepository,
   StoredReceivingSource,
@@ -24,7 +25,6 @@ export class InMemoryReceivingSourceRepository implements ReceivingSourceReposit
       deviceId: randomUUID(),
       testProof: null,
       pendingAlerts: [],
-      processedEventIds: new Set(),
       createdAt: now,
       updatedAt: now,
     };
@@ -56,10 +56,25 @@ export class InMemoryReceivingSourceRepository implements ReceivingSourceReposit
     this.sources.set(stored.id, stored);
     return toPublic(stored);
   }
+
+  public async recordTestAlert(source: StoredReceivingSource, alert: ParsedTestAlert): Promise<ReceivingSource> {
+    const current = this.sources.get(source.id);
+    if (!current) throw new Error("Receiving source no longer exists.");
+    if (current.pendingAlerts.some((item) => item.eventId === alert.eventId)) throw new DuplicateDeviceEventError();
+    return this.save(source);
+  }
+
+  public async recordLiveAlert(source: StoredReceivingSource, alert: ParsedTestAlert): Promise<string> {
+    const current = this.sources.get(source.id);
+    if (!current) throw new Error("Receiving source no longer exists.");
+    if (current.pendingAlerts.some((item) => item.eventId === alert.eventId)) throw new DuplicateDeviceEventError();
+    current.pendingAlerts.push(alert);
+    return alert.eventId;
+  }
 }
 
 function toPublic(source: StoredReceivingSource): ReceivingSource {
-  const { deviceCredentialHash: _credentialHash, deviceCredentialPrefix: _credentialPrefix, deviceSigningKey: _signingKey, processedEventIds: _eventIds, ...publicSource } = source;
+  const { deviceCredentialHash: _credentialHash, deviceCredentialPrefix: _credentialPrefix, deviceSigningKey: _signingKey, ...publicSource } = source;
   return clonePublic(publicSource);
 }
 
@@ -68,11 +83,11 @@ function clonePublic(source: ReceivingSource): ReceivingSource {
     ...source,
     selectedChannels: [...source.selectedChannels],
     channelVerification: source.channelVerification.map((item) => ({ ...item })),
-    testProof: source.testProof ? { ...source.testProof, bytes: new Uint8Array(source.testProof.bytes) } : null,
+    testProof: source.testProof ? { ...source.testProof } : null,
     pendingAlerts: source.pendingAlerts.map((alert) => ({ ...alert })),
   };
 }
 
 function cloneStored(source: StoredReceivingSource): StoredReceivingSource {
-  return { ...clonePublic(source), deviceCredentialHash: source.deviceCredentialHash, deviceCredentialPrefix: source.deviceCredentialPrefix, deviceSigningKey: source.deviceSigningKey, processedEventIds: new Set(source.processedEventIds) };
+  return { ...clonePublic(source), deviceCredentialHash: source.deviceCredentialHash, deviceCredentialPrefix: source.deviceCredentialPrefix, deviceSigningKey: source.deviceSigningKey };
 }

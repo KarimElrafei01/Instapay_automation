@@ -22,6 +22,7 @@ import {
   CreateReceivingSourceUseCase,
   GetReceivingSourceUseCase,
   IngestDeviceTestAlertUseCase,
+  IngestDeviceAlertUseCase,
   SubmitTestProofUseCase,
 } from "../application/receiving-source.use-cases.js";
 import {
@@ -65,6 +66,7 @@ export class ReceivingSourceController {
     private readonly getSource: GetReceivingSourceUseCase,
     private readonly submitProof: SubmitTestProofUseCase,
     private readonly ingestTestAlert: IngestDeviceTestAlertUseCase,
+    private readonly ingestAlert: IngestDeviceAlertUseCase,
     private readonly events: PlatformEventLogger,
   ) {}
 
@@ -160,6 +162,28 @@ export class ReceivingSourceController {
       return { data: { status: "accepted" } };
     } catch (error) {
       this.events.record({ action: "device_test_alert_ingested", outcome: "denied", requestId: request.id, resourceId: sourceId.sourceId, reasonCode: "DEVICE_EVENT_REJECTED" });
+      throw sourceError(error);
+    }
+  }
+
+  @Post("device/receiving-sources/:sourceId/alerts")
+  @HttpCode(HttpStatus.ACCEPTED)
+  public async receiveDeviceAlert(
+    @Body() body: unknown,
+    @Req() request: FastifyRequest,
+    @Headers("authorization") authorization: string | undefined,
+    @Headers("x-device-signature") signature: string | undefined,
+  ): Promise<{ data: { status: "accepted" } }> {
+    const sourceId = request.params as { sourceId?: unknown };
+    if (typeof sourceId.sourceId !== "string" || !z.string().uuid().safeParse(sourceId.sourceId).success) throw new BadRequestException({ code: "INVALID_REQUEST" });
+    const input = parseDeviceAlert(parseRequest(deviceAlertPayloadSchema, body).payload);
+    const credential = authorization?.match(/^Bearer (dvc_live_[A-Za-z0-9_-]{43})$/u)?.[1];
+    try {
+      await this.ingestAlert.execute({ sourceId: sourceId.sourceId, credential, signature, signedPayload: input.signedPayload, alert: { ...input, receivedAt: new Date(input.receivedAt) } });
+      this.events.record({ action: "device_alert_ingested", outcome: "accepted", requestId: request.id, resourceId: sourceId.sourceId });
+      return { data: { status: "accepted" } };
+    } catch (error) {
+      this.events.record({ action: "device_alert_ingested", outcome: "denied", requestId: request.id, resourceId: sourceId.sourceId, reasonCode: "DEVICE_EVENT_REJECTED" });
       throw sourceError(error);
     }
   }

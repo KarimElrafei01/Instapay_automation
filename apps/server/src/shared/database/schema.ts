@@ -267,6 +267,7 @@ export const alertEvents = pgTable("alert_events", {
   id: uuid("id").primaryKey(),
   sourceId: uuid("source_id").notNull().references(() => receivingSources.id, { onDelete: "restrict" }),
   externalEventId: uuid("external_event_id").notNull(),
+  ingestionChannel: varchar("ingestion_channel", { length: 20 }),
   senderOrAppIdentityNormalized: varchar("sender_or_app_identity_normalized", { length: 200 }).notNull(),
   receivedAt: timestamp("received_at", { withTimezone: true }).notNull(),
   alertOccurredAt: timestamp("alert_occurred_at", { withTimezone: true }),
