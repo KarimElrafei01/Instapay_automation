@@ -1,9 +1,10 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { timingSafeEqual } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import {
   DEVICE_CREDENTIAL_ISSUER,
   RECEIVING_SOURCE_REPOSITORY,
   TEST_PROOF_OCR,
+  RECEIVING_SOURCE_PROOF_STORAGE,
   type DeviceCredentialIssuer,
   type DeviceTestAlert,
   type ReceivingChannel,
@@ -11,6 +12,7 @@ import {
   type ReceivingSourceRepository,
   type StoredReceivingSource,
   type TestProofOcr,
+  type ReceivingSourceProofStorage,
 } from "../domain/ports.js";
 import {
   DuplicateDeviceEventError,
@@ -27,6 +29,7 @@ import {
   normalizeBankIdentity,
   parseTestAlert,
 } from "../domain/receiving-source-input.js";
+import { MatchNewAlertUseCase } from "../../payment-attempts/application/match-payment-attempt.use-case.js";
 
 const TEST_WINDOW_MS = 15 * 60 * 1_000;
 
@@ -80,16 +83,18 @@ export class SubmitTestProofUseCase {
   public constructor(
     @Inject(RECEIVING_SOURCE_REPOSITORY) private readonly sources: ReceivingSourceRepository,
     @Inject(TEST_PROOF_OCR) private readonly ocr: TestProofOcr,
+    @Inject(RECEIVING_SOURCE_PROOF_STORAGE) private readonly storage: ReceivingSourceProofStorage,
   ) {}
 
   public async execute(input: { ownerId: string; sourceId: string; bytes: Uint8Array; mediaType: "image/jpeg" | "image/png" | "image/webp" }): Promise<ReceivingSource> {
     const source = await this.requireOwnedStored(input.sourceId, input.ownerId);
     this.requireWithinTestWindow(source);
     const extracted = await this.ocr.extract(input);
+    const storageKey = `receiving-source-test-proofs/${source.id}/${randomUUID()}`;
+    await this.storage.put({ key: storageKey, body: input.bytes, contentType: input.mediaType });
     source.testProof = {
       mediaType: input.mediaType,
-      bytes: input.bytes,
-      extractedText: extracted.text,
+      storageKey,
       amountMinor: extracted.amountMinor,
       recipientMatched: includesCanonicalIpa(extracted.text, source.expectedIpa),
       indicatesSuccess: extracted.indicatesSuccess,
@@ -125,12 +130,29 @@ export class IngestDeviceTestAlertUseCase {
     if (!hasValidSignature(input.signedPayload, source.deviceSigningKey, input.signature)) throw new InvalidDeviceSignatureError();
     if (source.testExpiresAt <= new Date()) throw new TestWindowExpiredError();
     if (!source.selectedChannels.includes(input.alert.channel)) throw new InvalidDeviceSignatureError();
-    if (source.processedEventIds.has(input.alert.eventId)) throw new DuplicateDeviceEventError();
-    source.processedEventIds.add(input.alert.eventId);
-    source.pendingAlerts.push(parseTestAlert(input.alert));
+    const parsed = parseTestAlert(input.alert);
+    source.pendingAlerts.push(parsed);
     source.pendingAlerts = source.pendingAlerts.slice(-10);
     evaluateAllChannels(source);
-    return this.sources.save(source);
+    return this.sources.recordTestAlert(source, parsed);
+  }
+}
+
+@Injectable()
+export class IngestDeviceAlertUseCase {
+  public constructor(
+    @Inject(RECEIVING_SOURCE_REPOSITORY) private readonly sources: ReceivingSourceRepository,
+    @Inject(DEVICE_CREDENTIAL_ISSUER) private readonly credentials: DeviceCredentialIssuer,
+    private readonly matchNewAlert: MatchNewAlertUseCase,
+  ) {}
+
+  public async execute(input: { sourceId: string; credential: string | undefined; signature: string | undefined; signedPayload: string; alert: DeviceTestAlert }): Promise<void> {
+    const source = await this.sources.findStoredById(input.sourceId);
+    if (!source || source.status !== "active" || !(await this.credentials.verify(source.deviceCredentialHash, input.credential ?? ""))) throw new InvalidDeviceCredentialError();
+    if (!hasValidSignature(input.signedPayload, source.deviceSigningKey, input.signature)) throw new InvalidDeviceSignatureError();
+    if (!source.selectedChannels.includes(input.alert.channel)) throw new InvalidDeviceSignatureError();
+    const alertId = await this.sources.recordLiveAlert(source, parseTestAlert(input.alert));
+    await this.matchNewAlert.execute(alertId);
   }
 }
 
