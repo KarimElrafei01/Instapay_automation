@@ -15,6 +15,20 @@
       "when": 1790356542015,
       "tag": "0001_natural_chamber",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790420000000,
+      "tag": "0002_receiving_source_channels",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790420000001,
+      "tag": "0003_owner_sessions",
+      "breakpoints": true
     }
   ]
 }

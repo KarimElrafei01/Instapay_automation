@@ -118,6 +118,7 @@ Android may use a native alert-ingestion adapter for a registered receiving sour
 - WooCommerce plugin.
 - Theme-aware embedded checkout component.
 - Multiple stores and multiple bank accounts per owner.
+- Shared IPA across multiple stores. Model the receiving source as shared by the linked stores; evaluate alert candidates across every active attempt for that IPA and automatically approve only a uniquely provable match. Same-amount or otherwise indistinguishable candidates must become `ambiguous_match`, never a guessed approval.
 - Bank-parser catalog and custom template workflow.
 - Arabic/English customer pages and status notifications.
 - Reconciliation exports, staff roles, dispute flow, retention controls, high-value thresholds, and advanced screenshot-tampering/risk detection.

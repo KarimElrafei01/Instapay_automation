@@ -24,8 +24,12 @@ import {
 } from "../domain/errors.js";
 import { InvalidPhoneNumberError } from "../domain/phone.js";
 import type { Owner } from "../domain/ports.js";
+import { PlatformEventLogger } from "../../../shared/observability/platform-event-logger.js";
+import {
+  OWNER_SESSION_COOKIE_NAME,
+  refreshOwnerSessionCookie,
+} from "./owner-session-cookie.js";
 
-const sessionCookieName = "instapay_owner_session";
 const requestOtpSchema = z.object({
   phoneNumber: z.string().min(1).max(32),
   purpose: z.enum(["sign_up", "sign_in"]),
@@ -50,17 +54,23 @@ export class OwnerAuthController {
     private readonly verifyOwnerOtp: VerifyOwnerOtpUseCase,
     private readonly getCurrentOwner: GetCurrentOwnerUseCase,
     private readonly signOutOwner: SignOutOwnerUseCase,
+    private readonly events: PlatformEventLogger,
   ) {}
 
   @Post("otp/request")
   @HttpCode(HttpStatus.ACCEPTED)
-  public async requestOtp(@Body() body: unknown): Promise<{ data: { verificationId: string; expiresAt: string } }> {
+  public async requestOtp(
+    @Body() body: unknown,
+    @Req() request: FastifyRequest,
+  ): Promise<{ data: { verificationId: string; expiresAt: string } }> {
     const input = parseRequest(requestOtpSchema, body);
     try {
       const challenge = await this.requestOwnerOtp.execute(input);
+      this.events.record({ action: "owner_otp_requested", outcome: "accepted", requestId: request.id });
       return { data: { verificationId: challenge.verificationId, expiresAt: challenge.expiresAt.toISOString() } };
     } catch (error) {
       if (error instanceof InvalidPhoneNumberError) {
+        this.events.record({ action: "owner_otp_requested", outcome: "denied", requestId: request.id, reasonCode: "INVALID_REQUEST" });
         throw new BadRequestException({ code: "INVALID_REQUEST" });
       }
       throw error;
@@ -71,24 +81,22 @@ export class OwnerAuthController {
   @HttpCode(HttpStatus.OK)
   public async verifyOtp(
     @Body() body: unknown,
+    @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<{ data: { owner: ReturnType<typeof ownerProjection> } }> {
     const input = parseRequest(verifyOtpSchema, body);
     try {
       const result = await this.verifyOwnerOtp.execute(input);
-      reply.setCookie(sessionCookieName, result.session.token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV !== "development",
-        sameSite: "lax",
-        path: "/",
-        expires: result.session.expiresAt,
-      });
+      refreshOwnerSessionCookie(reply, result.session);
+      this.events.record({ action: "owner_otp_verified", outcome: "completed", requestId: request.id, actorOwnerId: result.owner.id });
       return { data: { owner: ownerProjection(result.owner) } };
     } catch (error) {
       if (error instanceof OwnerAlreadyExistsError) {
+        this.events.record({ action: "owner_otp_verified", outcome: "denied", requestId: request.id, reasonCode: "PHONE_ALREADY_REGISTERED" });
         throw new ConflictException({ code: "PHONE_ALREADY_REGISTERED" });
       }
       if (error instanceof OtpVerificationError || error instanceof OwnerAuthenticationError) {
+        this.events.record({ action: "owner_otp_verified", outcome: "denied", requestId: request.id, reasonCode: "INVALID_OTP_OR_AUTH" });
         throw new UnauthorizedException({ code: "INVALID_OTP_OR_AUTH" });
       }
       throw error;
@@ -100,17 +108,13 @@ export class OwnerAuthController {
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<{ data: { owner: ReturnType<typeof ownerProjection> } }> {
-    const currentOwner = await this.getCurrentOwner.execute(request.cookies[sessionCookieName]);
+    const currentOwner = await this.getCurrentOwner.execute(request.cookies[OWNER_SESSION_COOKIE_NAME]);
     if (!currentOwner || currentOwner.owner.disabledAt) {
+      this.events.record({ action: "owner_session_checked", outcome: "denied", requestId: request.id, reasonCode: "UNAUTHENTICATED" });
       throw new UnauthorizedException({ code: "UNAUTHENTICATED" });
     }
-    reply.setCookie(sessionCookieName, currentOwner.session.token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV !== "development",
-      sameSite: "lax",
-      path: "/",
-      expires: currentOwner.session.expiresAt,
-    });
+    refreshOwnerSessionCookie(reply, currentOwner.session);
+    this.events.record({ action: "owner_session_checked", outcome: "completed", requestId: request.id, actorOwnerId: currentOwner.owner.id });
     return { data: { owner: ownerProjection(currentOwner.owner) } };
   }
 
@@ -120,8 +124,9 @@ export class OwnerAuthController {
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<void> {
-    await this.signOutOwner.execute(request.cookies[sessionCookieName]);
-    reply.clearCookie(sessionCookieName, { httpOnly: true, path: "/" });
+    await this.signOutOwner.execute(request.cookies[OWNER_SESSION_COOKIE_NAME]);
+    reply.clearCookie(OWNER_SESSION_COOKIE_NAME, { httpOnly: true, path: "/" });
+    this.events.record({ action: "owner_signed_out", outcome: "completed", requestId: request.id });
   }
 }
 

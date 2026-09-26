@@ -119,6 +119,11 @@ Only matching/decision services may transition an attempt to `automatically_appr
 - Add tests before changing matching rules. Cover same-amount concurrency, duplicate alerts, late alerts, and mismatching screenshot/SMS evidence.
 - Preserve existing user work. Never hard-reset, discard changes, or expose secrets.
 
+## Branch and merge policy
+
+- Create every feature or change on a separate branch; never develop directly on `main`.
+- Do not merge any branch into `main` unless the user explicitly authorizes that merge.
+
 ## Success metrics for the pilot
 
 - Automatic approval rate.
