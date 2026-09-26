@@ -6,7 +6,6 @@ import {
   Get,
   Headers,
   HttpCode,
-  HttpException,
   HttpStatus,
   Post,
   Req,
@@ -35,6 +34,7 @@ import {
   TestWindowExpiredError,
 } from "../domain/errors.js";
 import type { ReceivingSource } from "../domain/ports.js";
+import { PlatformEventLogger } from "../../../shared/observability/platform-event-logger.js";
 
 const createSourceSchema = z.object({
   bankName: z.string().max(120),
@@ -58,8 +58,6 @@ const deviceAlertSchema = z.object({
 
 @Controller("v1")
 export class ReceivingSourceController {
-  private readonly deviceRateWindows = new Map<string, { startedAt: number; count: number }>();
-
   public constructor(
     private readonly getCurrentOwner: GetCurrentOwnerUseCase,
     private readonly getOwnerStore: GetOwnerStoreUseCase,
@@ -67,6 +65,7 @@ export class ReceivingSourceController {
     private readonly getSource: GetReceivingSourceUseCase,
     private readonly submitProof: SubmitTestProofUseCase,
     private readonly ingestTestAlert: IngestDeviceTestAlertUseCase,
+    private readonly events: PlatformEventLogger,
   ) {}
 
   @Post("owner/receiving-source")
@@ -78,17 +77,30 @@ export class ReceivingSourceController {
   ): Promise<{ data: { source: ReceivingSourceProjection; deviceProvisioning: DeviceProvisioning } }> {
     const owner = await this.requireOwner(request, reply);
     const store = await this.getOwnerStore.execute(owner.id);
-    if (!store) throw new BadRequestException({ code: "STORE_REQUIRED" });
+    if (!store) {
+      this.events.record({ action: "receiving_source_created", outcome: "denied", requestId: request.id, actorOwnerId: owner.id, reasonCode: "STORE_REQUIRED" });
+      throw new BadRequestException({ code: "STORE_REQUIRED" });
+    }
     const input = parseRequest(createSourceSchema, body);
     try {
       const created = await this.createSource.execute({
         ownerId: owner.id, storeId: store.id, ipa: store.ipa,
         bankName: input.bankName, selectedChannels: input.channels, devicePlatform: input.platform,
       });
+      this.events.record({
+        action: "receiving_source_created", outcome: "completed", requestId: request.id,
+        actorOwnerId: owner.id, resourceId: created.source.id,
+      });
       return { data: { source: sourceProjection(created.source), deviceProvisioning: provisioning(created.source, created.deviceCredential, created.deviceSigningKey) } };
     } catch (error) {
-      if (error instanceof ReceivingSourceAlreadyExistsError) throw new ConflictException({ code: "RECEIVING_SOURCE_ALREADY_CONFIGURED" });
-      if (error instanceof Error) throw new BadRequestException({ code: "INVALID_REQUEST" });
+      if (error instanceof ReceivingSourceAlreadyExistsError) {
+        this.events.record({ action: "receiving_source_created", outcome: "denied", requestId: request.id, actorOwnerId: owner.id, reasonCode: "RECEIVING_SOURCE_ALREADY_CONFIGURED" });
+        throw new ConflictException({ code: "RECEIVING_SOURCE_ALREADY_CONFIGURED" });
+      }
+      if (error instanceof Error) {
+        this.events.record({ action: "receiving_source_created", outcome: "failed", requestId: request.id, actorOwnerId: owner.id, reasonCode: "INVALID_REQUEST" });
+        throw new BadRequestException({ code: "INVALID_REQUEST" });
+      }
       throw error;
     }
   }
@@ -101,7 +113,9 @@ export class ReceivingSourceController {
     const owner = await this.requireOwner(request, reply);
     const store = await this.getOwnerStore.execute(owner.id);
     if (!store) return { data: { source: null } };
-    return { data: { source: projectOrNull(await this.getSource.execute(owner.id, store.id)) } };
+    const source = await this.getSource.execute(owner.id, store.id);
+    this.events.record({ action: "receiving_source_viewed", outcome: "completed", requestId: request.id, actorOwnerId: owner.id });
+    return { data: { source: projectOrNull(source) } };
   }
 
   @Post("owner/receiving-source/:sourceId/test-proof")
@@ -117,8 +131,10 @@ export class ReceivingSourceController {
     const input = parseRequest(uploadProofSchema, body);
     try {
       const source = await this.submitProof.execute({ ownerId: owner.id, sourceId: sourceId.sourceId, mediaType: input.mediaType, bytes: decodeImage(input.imageBase64) });
+      this.events.record({ action: "receiving_source_test_proof_submitted", outcome: "completed", requestId: request.id, actorOwnerId: owner.id, resourceId: source.id });
       return { data: { source: sourceProjection(source) } };
     } catch (error) {
+      this.events.record({ action: "receiving_source_test_proof_submitted", outcome: "failed", requestId: request.id, actorOwnerId: owner.id, resourceId: sourceId.sourceId, reasonCode: "PROOF_REJECTED" });
       throw sourceError(error);
     }
   }
@@ -133,7 +149,6 @@ export class ReceivingSourceController {
   ): Promise<{ data: { status: "accepted" } }> {
     const sourceId = request.params as { sourceId?: unknown };
     if (typeof sourceId.sourceId !== "string" || !z.string().uuid().safeParse(sourceId.sourceId).success) throw new BadRequestException({ code: "INVALID_REQUEST" });
-    this.enforceDeviceRateLimit(sourceId.sourceId);
     const input = parseDeviceAlert(parseRequest(deviceAlertPayloadSchema, body).payload);
     const credential = authorization?.match(/^Bearer (dvc_live_[A-Za-z0-9_-]{43})$/u)?.[1];
     try {
@@ -141,28 +156,23 @@ export class ReceivingSourceController {
         sourceId: sourceId.sourceId, credential, signature, signedPayload: input.signedPayload,
         alert: { ...input, receivedAt: new Date(input.receivedAt) },
       });
+      this.events.record({ action: "device_test_alert_ingested", outcome: "accepted", requestId: request.id, resourceId: sourceId.sourceId });
       return { data: { status: "accepted" } };
     } catch (error) {
+      this.events.record({ action: "device_test_alert_ingested", outcome: "denied", requestId: request.id, resourceId: sourceId.sourceId, reasonCode: "DEVICE_EVENT_REJECTED" });
       throw sourceError(error);
     }
   }
 
   private async requireOwner(request: FastifyRequest, reply: FastifyReply): Promise<{ id: string }> {
     const current = await this.getCurrentOwner.execute(request.cookies[OWNER_SESSION_COOKIE_NAME]);
-    if (!current || current.owner.disabledAt || !current.owner.phoneVerifiedAt) throw new UnauthorizedException({ code: "UNAUTHENTICATED" });
-    refreshOwnerSessionCookie(reply, current.session);
-    return { id: current.owner.id };
-  }
-
-  private enforceDeviceRateLimit(sourceId: string): void {
-    const now = Date.now();
-    const window = this.deviceRateWindows.get(sourceId);
-    if (!window || now - window.startedAt >= 60_000) {
-      this.deviceRateWindows.set(sourceId, { startedAt: now, count: 1 });
-      return;
+    if (!current || current.owner.disabledAt || !current.owner.phoneVerifiedAt) {
+      this.events.record({ action: "owner_authorization_checked", outcome: "denied", requestId: request.id, reasonCode: "UNAUTHENTICATED" });
+      throw new UnauthorizedException({ code: "UNAUTHENTICATED" });
     }
-    if (window.count >= 60) throw new HttpException({ code: "RATE_LIMITED" }, HttpStatus.TOO_MANY_REQUESTS);
-    window.count += 1;
+    refreshOwnerSessionCookie(reply, current.session);
+    this.events.record({ action: "owner_authorization_checked", outcome: "completed", requestId: request.id, actorOwnerId: current.owner.id });
+    return { id: current.owner.id };
   }
 }
 

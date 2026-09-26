@@ -3,7 +3,7 @@ import { AuthModule } from "../auth/auth.module.js";
 import { CreateStoreUseCase, GetOwnerStoreUseCase } from "./application/create-store.use-case.js";
 import { Argon2StoreCredentialIssuer } from "./data/argon2-store-credential-issuer.js";
 import { HttpsWebhookUrlValidator } from "./data/https-webhook-url.validator.js";
-import { InMemoryStoreRepository } from "./data/in-memory-store.repository.js";
+import { DrizzleStoreRepository } from "./data/drizzle-store.repository.js";
 import {
   STORE_CREDENTIAL_ISSUER,
   STORE_REPOSITORY,
@@ -17,7 +17,8 @@ import { StoreController } from "./presentation/store.controller.js";
   providers: [
     CreateStoreUseCase,
     GetOwnerStoreUseCase,
-    { provide: STORE_REPOSITORY, useFactory: () => new InMemoryStoreRepository() },
+    DrizzleStoreRepository,
+    { provide: STORE_REPOSITORY, useExisting: DrizzleStoreRepository },
     { provide: STORE_CREDENTIAL_ISSUER, useFactory: () => new Argon2StoreCredentialIssuer() },
     { provide: WEBHOOK_URL_VALIDATOR, useFactory: () => new HttpsWebhookUrlValidator() },
   ],

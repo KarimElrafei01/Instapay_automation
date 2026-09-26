@@ -85,6 +85,19 @@ export const owners = pgTable("owners", {
   check("owners_phone_e164_check", sql`${table.phoneE164} ~ '^[+][1-9][0-9]{7,14}$'`),
 ]);
 
+export const ownerSessions = pgTable("owner_sessions", {
+  id: uuid("id").primaryKey(),
+  ownerId: uuid("owner_id").notNull().references(() => owners.id, { onDelete: "restrict" }),
+  tokenHash: bytea("token_hash").notNull().unique(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("owner_sessions_owner_expires_idx").on(table.ownerId, table.expiresAt),
+  index("owner_sessions_active_expires_idx").on(table.expiresAt).where(sql`${table.revokedAt} is null`),
+]);
+
 export const stores = pgTable("stores", {
   id: uuid("id").primaryKey(),
   ownerId: uuid("owner_id").notNull().unique().references(() => owners.id, { onDelete: "restrict" }),

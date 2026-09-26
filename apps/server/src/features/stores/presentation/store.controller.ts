@@ -20,6 +20,7 @@ import {
 import { CreateStoreUseCase } from "../application/create-store.use-case.js";
 import { IpaAlreadyRegisteredError, StoreAlreadyExistsError } from "../domain/errors.js";
 import type { MatchingWindowMinutes, Store } from "../domain/ports.js";
+import { PlatformEventLogger } from "../../../shared/observability/platform-event-logger.js";
 
 const createStoreSchema = z.object({
   displayName: z.string().max(480),
@@ -34,6 +35,7 @@ export class StoreController {
   public constructor(
     private readonly getCurrentOwner: GetCurrentOwnerUseCase,
     private readonly createStore: CreateStoreUseCase,
+    private readonly events: PlatformEventLogger,
   ) {}
 
   @Post()
@@ -45,12 +47,17 @@ export class StoreController {
   ): Promise<{ data: { store: ReturnType<typeof storeProjection>; integrationSecret: IntegrationSecretProjection } }> {
     const currentOwner = await this.getCurrentOwner.execute(request.cookies[OWNER_SESSION_COOKIE_NAME]);
     if (!currentOwner || currentOwner.owner.disabledAt || !currentOwner.owner.phoneVerifiedAt) {
+      this.events.record({ action: "store_created", outcome: "denied", requestId: request.id, reasonCode: "UNAUTHENTICATED" });
       throw new UnauthorizedException({ code: "UNAUTHENTICATED" });
     }
     const input = parseRequest(createStoreSchema, body);
     try {
       const created = await this.createStore.execute({ ownerId: currentOwner.owner.id, ...input });
       refreshOwnerSessionCookie(reply, currentOwner.session);
+      this.events.record({
+        action: "store_created", outcome: "completed", requestId: request.id,
+        actorOwnerId: currentOwner.owner.id, resourceId: created.store.id,
+      });
       return {
         data: {
           store: storeProjection(created.store),
@@ -63,9 +70,17 @@ export class StoreController {
       };
     } catch (error) {
       if (error instanceof StoreAlreadyExistsError || error instanceof IpaAlreadyRegisteredError) {
+        this.events.record({
+          action: "store_created", outcome: "denied", requestId: request.id,
+          actorOwnerId: currentOwner.owner.id, reasonCode: "STORE_CONFIGURATION_CONFLICT",
+        });
         throw new ConflictException({ code: "STORE_CONFIGURATION_CONFLICT" });
       }
       if (error instanceof Error) {
+        this.events.record({
+          action: "store_created", outcome: "failed", requestId: request.id,
+          actorOwnerId: currentOwner.owner.id, reasonCode: "INVALID_REQUEST",
+        });
         throw new BadRequestException({ code: "INVALID_REQUEST" });
       }
       throw error;

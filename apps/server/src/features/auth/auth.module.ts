@@ -4,8 +4,8 @@ import { RequestOwnerOtpUseCase } from "./application/request-owner-otp.use-case
 import { SignOutOwnerUseCase } from "./application/sign-out-owner.use-case.js";
 import { VerifyOwnerOtpUseCase } from "./application/verify-owner-otp.use-case.js";
 import { DevelopmentOtpProvider } from "./data/development-otp.provider.js";
-import { InMemoryOwnerRepository } from "./data/in-memory-owner.repository.js";
-import { InMemoryOwnerSessionRepository } from "./data/in-memory-owner-session.repository.js";
+import { DrizzleOwnerRepository } from "./data/drizzle-owner.repository.js";
+import { DrizzleOwnerSessionRepository } from "./data/drizzle-owner-session.repository.js";
 import {
   OTP_PROVIDER,
   OWNER_REPOSITORY,
@@ -21,8 +21,10 @@ import { OwnerAuthController } from "./presentation/owner-auth.controller.js";
     GetCurrentOwnerUseCase,
     SignOutOwnerUseCase,
     { provide: OTP_PROVIDER, useFactory: () => new DevelopmentOtpProvider(process.env.NODE_ENV) },
-    { provide: OWNER_REPOSITORY, useFactory: () => new InMemoryOwnerRepository() },
-    { provide: OWNER_SESSION_REPOSITORY, useFactory: () => new InMemoryOwnerSessionRepository() },
+    DrizzleOwnerRepository,
+    DrizzleOwnerSessionRepository,
+    { provide: OWNER_REPOSITORY, useExisting: DrizzleOwnerRepository },
+    { provide: OWNER_SESSION_REPOSITORY, useExisting: DrizzleOwnerSessionRepository },
   ],
   exports: [GetCurrentOwnerUseCase],
 })
