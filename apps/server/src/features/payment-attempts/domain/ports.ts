@@ -23,4 +23,8 @@ export interface PaymentAttemptRepository {
 }
 export type ProcessedProofImage = { bytes: Uint8Array; mediaType: "image/jpeg"; inputSha256: Buffer; canonicalSha256: Buffer; width: number; height: number };
 export interface ProofImageProcessor { process(input: { bytes: Uint8Array; declaredMediaType: ImageMediaType }): Promise<ProcessedProofImage>; }
-export interface PrivateObjectStorage { put(input: { key: string; body: Uint8Array; contentType: ImageMediaType }): Promise<void>; delete(key: string): Promise<void>; }
+export interface PrivateObjectStorage {
+  put(input: { key: string; body: Uint8Array; contentType: ImageMediaType }): Promise<void>;
+  get(key: string): Promise<{ body: Uint8Array; contentType: ImageMediaType }>;
+  delete(key: string): Promise<void>;
+}

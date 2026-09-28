@@ -34,6 +34,8 @@ export type DeviceTestAlert = {
 export type ParsedTestAlert = DeviceTestAlert & {
   amountMinor: number | null;
   indicatesCredit: boolean;
+  payerNameNormalized: string | null;
+  transactionReferenceNormalized: string | null;
 };
 
 export type ReceivingSource = {

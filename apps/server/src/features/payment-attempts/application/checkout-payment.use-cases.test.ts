@@ -4,7 +4,7 @@ import { CreateHostedCheckoutUseCase, InvalidCheckoutSubmissionError, SubmitChec
 import type { CheckoutStore, PaymentAttemptRepository, PrivateObjectStorage, ProofImageProcessor, StoredHostedCheckoutSession, SubmittedProof } from "../domain/ports.js";
 const store: CheckoutStore = { id: "store", ipa: "merchant@instapay", accountHolderName: "Amina", defaultWebhookUrl: "https://merchant.test/webhook", matchingWindowMinutes: 15 };
 const processor: ProofImageProcessor = { process: async ({ bytes }) => ({ bytes: new Uint8Array([1, 2, 3]), mediaType: "image/jpeg", inputSha256: sha(bytes), canonicalSha256: sha("canonical"), width: 1080, height: 1920 }) };
-const storage: PrivateObjectStorage = { put: async () => undefined, delete: async () => undefined };
+const storage: PrivateObjectStorage = { put: async () => undefined, get: async () => ({ body: new Uint8Array(), contentType: "image/jpeg" }), delete: async () => undefined };
 describe("hosted checkout proof submission", () => {
   it("does not create an attempt until the customer submits the screenshot", async () => {
     const repository = new FakeRepository(); const create = new CreateHostedCheckoutUseCase(repository); const submit = new SubmitCheckoutProofUseCase(repository, processor, storage);

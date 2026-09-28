@@ -30,6 +30,12 @@ describe("deterministic payment matching", () => {
     expect(decidePaymentMatch({ ...attempt(), proof: { ...attempt().proof, recipientNormalized: "other@instapay" } }, [alert()], now)).toMatchObject({ outcome: "manual_verification_required" });
   });
 
+  it("does not approve when a payer or transaction reference extracted from the notification body disagrees", () => {
+    const proof = { ...attempt().proof, payerNormalized: "customer one", transactionReferenceNormalized: "txn-1234" };
+    expect(decidePaymentMatch({ ...attempt(), proof }, [{ ...alert(), payerNameNormalized: "customer two", transactionReferenceNormalized: "txn-1234" }], now)).toMatchObject({ outcome: "awaiting_bank_alert" });
+    expect(decidePaymentMatch({ ...attempt(), proof }, [{ ...alert(), payerNameNormalized: "customer one", transactionReferenceNormalized: "txn-9999" }], now)).toMatchObject({ outcome: "awaiting_bank_alert" });
+  });
+
   it("moves expired unmatched attempts to manual verification", () => {
     expect(decidePaymentMatch(attempt(), [], new Date("2026-09-27T10:16:00.000Z"))).toMatchObject({ outcome: "manual_verification_required", reasonCode: "MATCH_WINDOW_EXPIRED" });
   });

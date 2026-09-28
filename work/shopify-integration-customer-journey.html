@@ -1,0 +1,163 @@
+<div id="shopify-flow-artifact" aria-label="Comparison of Shopify manual InstaPay pilot and future native checkout journey">
+  <style>
+    #shopify-flow-artifact {
+      --ink: light-dark(#17212b, #f0f5f8);
+      --muted: light-dark(#667580, #a9b8c3);
+      --canvas: light-dark(#f5f8f7, #111b20);
+      --panel: light-dark(#ffffff, #17242a);
+      --line: light-dark(#d6e0df, #30424a);
+      --brand: light-dark(#087f68, #55d8ba);
+      --brand-soft: light-dark(#e3f5ef, #153c36);
+      --warning: light-dark(#9b6115, #f1bd68);
+      --warning-soft: light-dark(#fff2d9, #423018);
+      --success: light-dark(#08714e, #5bdbad);
+      --phone: light-dark(#152126, #0a1115);
+      --screen: light-dark(#fcfdfc, #17242a);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      max-width: 1024px;
+      margin: 0 auto;
+    }
+    #shopify-flow-artifact * { box-sizing: border-box; }
+    #shopify-flow-artifact .shell { background: var(--canvas); border: 1px solid var(--line); border-radius: 24px; overflow: hidden; }
+    #shopify-flow-artifact .top { padding: 22px 24px 16px; display: flex; align-items: start; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--line); }
+    #shopify-flow-artifact h2 { margin: 0; font-size: 20px; font-weight: 500; letter-spacing: -.02em; }
+    #shopify-flow-artifact .sub { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+    #shopify-flow-artifact .switch { display: flex; gap: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 4px; white-space: nowrap; }
+    #shopify-flow-artifact button { appearance: none; border: 0; border-radius: 8px; padding: 8px 10px; background: transparent; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
+    #shopify-flow-artifact button[aria-pressed="true"] { background: var(--brand); color: #fff; }
+    #shopify-flow-artifact .route { padding: 18px 24px 24px; }
+    #shopify-flow-artifact .route-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 20px; }
+    #shopify-flow-artifact .route-title { font-size: 15px; font-weight: 500; }
+    #shopify-flow-artifact .tag { display: inline-flex; align-items: center; gap: 6px; color: var(--success); font-size: 12px; font-weight: 500; }
+    #shopify-flow-artifact .tag::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+    #shopify-flow-artifact .tag.future { color: var(--warning); }
+    #shopify-flow-artifact .journey { display: grid; grid-template-columns: minmax(130px, 1fr) 34px minmax(130px, 1fr) 34px minmax(130px, 1fr) 34px minmax(130px, 1fr); align-items: center; gap: 6px; }
+    #shopify-flow-artifact .arrow { color: var(--brand); text-align: center; font-size: 25px; font-weight: 400; }
+    #shopify-flow-artifact .phone-wrap { min-width: 0; }
+    #shopify-flow-artifact .phone { min-height: 294px; background: var(--phone); border: 5px solid var(--phone); border-radius: 25px; padding: 6px; box-shadow: 0 12px 30px light-dark(#182c2830, #00000040); }
+    #shopify-flow-artifact .notch { width: 44%; height: 10px; margin: 0 auto 6px; border-radius: 20px; background: light-dark(#cbd5d7, #263940); }
+    #shopify-flow-artifact .screen { height: 258px; padding: 13px; overflow: hidden; border-radius: 17px; background: var(--screen); color: var(--ink); }
+    #shopify-flow-artifact .tiny-brand { color: var(--brand); font-size: 11px; font-weight: 500; letter-spacing: .04em; }
+    #shopify-flow-artifact .screen h3 { margin: 15px 0 6px; font-size: 16px; font-weight: 500; line-height: 1.2; }
+    #shopify-flow-artifact .screen p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
+    #shopify-flow-artifact .order { margin-top: 13px; padding: 10px; background: light-dark(#f2f6f5, #203138); border-radius: 10px; }
+    #shopify-flow-artifact .row { display: flex; justify-content: space-between; gap: 7px; font-size: 11px; margin-top: 7px; }
+    #shopify-flow-artifact .row:first-child { margin-top: 0; }
+    #shopify-flow-artifact .amount { font-weight: 500; }
+    #shopify-flow-artifact .pending { color: var(--warning); }
+    #shopify-flow-artifact .paid { color: var(--success); }
+    #shopify-flow-artifact .choice { margin-top: 14px; padding: 10px; border: 1px solid var(--brand); border-radius: 10px; background: var(--brand-soft); color: var(--brand); font-size: 11px; font-weight: 500; }
+    #shopify-flow-artifact .cta { margin-top: 14px; padding: 10px; border-radius: 10px; background: var(--brand); color: #fff; font-size: 11px; font-weight: 500; text-align: center; }
+    #shopify-flow-artifact .proof { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 13px; }
+    #shopify-flow-artifact .proof > div { min-height: 58px; padding: 8px; border-radius: 9px; background: light-dark(#edf4f1, #21343b); font-size: 10px; }
+    #shopify-flow-artifact .proof strong { display: block; margin-bottom: 4px; font-size: 10px; font-weight: 500; }
+    #shopify-flow-artifact .caption { margin: 10px 2px 0; color: var(--muted); font-size: 12px; text-align: center; line-height: 1.35; }
+    #shopify-flow-artifact .system { margin-top: 20px; display: flex; align-items: center; justify-content: center; gap: 9px; color: var(--muted); font-size: 12px; text-align: center; }
+    #shopify-flow-artifact .system span { color: var(--brand); font-weight: 500; }
+    #shopify-flow-artifact [data-mode="native"] .pilot-only, #shopify-flow-artifact [data-mode="pilot"] .native-only { display: none; }
+    @media (max-width: 760px) {
+      #shopify-flow-artifact .top { align-items: stretch; flex-direction: column; }
+      #shopify-flow-artifact .switch { align-self: flex-start; }
+      #shopify-flow-artifact .journey { grid-template-columns: 1fr 28px 1fr; }
+      #shopify-flow-artifact .journey .phone-wrap:nth-of-type(7), #shopify-flow-artifact .journey .arrow:nth-of-type(6) { display: none; }
+      #shopify-flow-artifact .phone { min-height: 260px; }
+      #shopify-flow-artifact .screen { height: 224px; }
+    }
+    @media (max-width: 470px) {
+      #shopify-flow-artifact .route, #shopify-flow-artifact .top { padding-left: 14px; padding-right: 14px; }
+      #shopify-flow-artifact .journey { grid-template-columns: 1fr; gap: 10px; }
+      #shopify-flow-artifact .arrow { transform: rotate(90deg); height: 22px; }
+      #shopify-flow-artifact .phone-wrap:nth-of-type(7), #shopify-flow-artifact .journey .arrow:nth-of-type(6) { display: block; }
+      #shopify-flow-artifact .phone { min-height: 0; }
+      #shopify-flow-artifact .screen { height: 205px; }
+    }
+  </style>
+  <section class="shell" data-mode="pilot">
+    <div class="top">
+      <div>
+        <h2>What the customer experiences</h2>
+        <p class="sub">Same transfer verification engine; two Shopify entry points.</p>
+      </div>
+      <div class="switch" role="group" aria-label="Select Shopify integration route">
+        <button type="button" data-route="pilot" aria-pressed="true">Pilot now</button>
+        <button type="button" data-route="native" aria-pressed="false">Native future</button>
+      </div>
+    </div>
+    <div class="route">
+      <div class="route-head">
+        <div class="route-title pilot-only">Shopify manual payment → verified InstaPay transfer</div>
+        <div class="route-title native-only">Native Shopify “Pay with InstaPay” → hosted payment page</div>
+        <div class="tag pilot-only">Available on a live store now</div>
+        <div class="tag future native-only">Requires Payments Partner approval</div>
+      </div>
+      <div class="journey">
+        <div class="phone-wrap">
+          <div class="phone"><div class="notch"></div><div class="screen">
+            <div class="tiny-brand">SHOPIFY CHECKOUT</div>
+            <h3>Review and place order</h3>
+            <div class="order"><div class="row"><span>Order total</span><span class="amount">EGP 1,250</span></div><div class="row"><span>Payment</span><span class="pilot-only">InstaPay transfer</span><span class="native-only">Pay with InstaPay</span></div></div>
+            <div class="choice pilot-only">Manual payment selected</div>
+            <div class="choice native-only">Continue to InstaPay</div>
+            <div class="cta pilot-only">Place order</div><div class="cta native-only">Pay now</div>
+          </div></div>
+          <div class="caption pilot-only">Customer places an unpaid Shopify order.</div><div class="caption native-only">Customer chooses InstaPay inside checkout.</div>
+        </div>
+        <div class="arrow">→</div>
+        <div class="phone-wrap">
+          <div class="phone"><div class="notch"></div><div class="screen">
+            <div class="tiny-brand pilot-only">ORDER CONFIRMATION</div><div class="tiny-brand native-only">INSTAPAY CHECKOUT</div>
+            <h3 class="pilot-only">Order received</h3><h3 class="native-only">Transfer EGP 1,250</h3>
+            <p class="pilot-only">Your order is waiting for payment.</p><p class="native-only">Send the exact amount to the merchant IPA.</p>
+            <div class="order pilot-only"><div class="row"><span>Order #1042</span><span class="pending">Pending payment</span></div><div class="row"><span>Pay by InstaPay</span><span>Open secure link</span></div></div>
+            <div class="order native-only"><div class="row"><span>Recipient</span><span>merchant@instapay</span></div><div class="row"><span>Amount</span><span class="amount">EGP 1,250</span></div></div>
+            <div class="cta pilot-only">Open InstaPay payment page</div><div class="cta native-only">Open InstaPay</div>
+          </div></div>
+          <div class="caption pilot-only">A unique payment link is sent after the order.</div><div class="caption native-only">Shopify directs the customer here before payment completes.</div>
+        </div>
+        <div class="arrow">→</div>
+        <div class="phone-wrap">
+          <div class="phone"><div class="notch"></div><div class="screen">
+            <div class="tiny-brand">INSTAPAY PROOF</div>
+            <h3>Upload transfer screenshot</h3>
+            <p>The transfer is made in InstaPay. The customer returns with a screenshot.</p>
+            <div class="proof"><div><strong>Exact amount</strong>EGP 1,250</div><div><strong>Recipient</strong>merchant@instapay</div></div>
+            <div class="cta">Submit proof</div>
+          </div></div>
+          <div class="caption">The screenshot supports the verification; it cannot approve payment by itself.</div>
+        </div>
+        <div class="arrow">→</div>
+        <div class="phone-wrap">
+          <div class="phone"><div class="notch"></div><div class="screen">
+            <div class="tiny-brand">ORDER STATUS</div>
+            <h3>Payment verified</h3>
+            <p>Your transfer evidence matched the trusted merchant alert.</p>
+            <div class="order"><div class="row"><span>Order #1042</span><span class="paid">Paid</span></div><div class="row"><span>Amount</span><span class="amount">EGP 1,250</span></div></div>
+            <div class="cta">Continue shopping</div>
+          </div></div>
+          <div class="caption">Shopify records the manual order as paid only after a deterministic match.</div>
+        </div>
+      </div>
+      <div class="system"><span>Behind the scenes:</span> private proof → OCR facts → trusted SMS/notification → deterministic match → paid order</div>
+    </div>
+  </section>
+  <script>
+    (() => {
+      const root = document.getElementById('shopify-flow-artifact');
+      const shell = root.querySelector('.shell');
+      const buttons = [...root.querySelectorAll('[data-route]')];
+      const apply = (route, save) => {
+        shell.dataset.mode = route;
+        buttons.forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.route === route)));
+        if (save && window.openai?.setWidgetState) window.openai.setWidgetState({ modelContent: { route }, privateContent: { route } }).catch(() => {});
+      };
+      const saved = window.openai?.widgetState?.privateContent?.route || window.openai?.widgetState?.modelContent?.route;
+      if (saved === 'native' || saved === 'pilot') apply(saved, false);
+      buttons.forEach((button) => button.addEventListener('click', () => apply(button.dataset.route, true)));
+      window.addEventListener('openai:set_globals', (event) => {
+        const route = event.detail?.globals?.widgetState?.privateContent?.route || event.detail?.globals?.widgetState?.modelContent?.route;
+        if (route === 'native' || route === 'pilot') apply(route, false);
+      });
+    })();
+  </script>
+</div>

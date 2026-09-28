@@ -2,13 +2,16 @@ import { BadRequestException, Body, Controller, Get, Headers, HttpCode, HttpStat
 import { z } from "zod";
 import { PlatformEventLogger } from "../../../shared/observability/platform-event-logger.js";
 import { CreateMerchantHostedCheckoutUseCase, GetHostedCheckoutUseCase, InvalidCheckoutSubmissionError, InvalidMerchantCredentialError, SubmitCheckoutProofUseCase } from "../application/checkout-payment.use-cases.js";
+import { ExtractPaymentProofUseCase } from "../application/extract-payment-proof.use-case.js";
+import { PaymentProofOcrUnavailableError } from "../data/azure-vision-payment-proof-ocr.js";
+import type { PaymentAttempt } from "../domain/ports.js";
 
 const merchantCheckoutSchema = z.object({ merchantOrderId: z.string().min(1).max(128), orderReference: z.string().min(1).max(100).optional(), amountMinor: z.number().int().min(100).max(10_000_000) }).strict();
 const proofSchema = z.object({ checkoutToken: z.string().regex(/^[A-Za-z0-9_-]{43}$/u), mediaType: z.enum(["image/jpeg", "image/png", "image/webp"]), imageBase64: z.string().min(4).max(6_990_508) }).strict();
 
 @Controller("v1")
 export class HostedCheckoutController {
-  public constructor(private readonly create: CreateMerchantHostedCheckoutUseCase, private readonly get: GetHostedCheckoutUseCase, private readonly submit: SubmitCheckoutProofUseCase, private readonly events: PlatformEventLogger) {}
+  public constructor(private readonly create: CreateMerchantHostedCheckoutUseCase, private readonly get: GetHostedCheckoutUseCase, private readonly submit: SubmitCheckoutProofUseCase, private readonly extractProof: ExtractPaymentProofUseCase, private readonly events: PlatformEventLogger) {}
   @Post("merchant/checkout-sessions")
   @HttpCode(HttpStatus.CREATED)
   public async createSession(@Headers("authorization") authorization: string | undefined, @Body() body: unknown) {
@@ -29,7 +32,17 @@ export class HostedCheckoutController {
   @HttpCode(HttpStatus.ACCEPTED)
   public async submitProof(@Param("checkoutId") checkoutId: string, @Body() body: unknown) {
     const input = parse(proofSchema, body);
-    try { const attempt = await this.submit.execute({ checkoutPublicId: checkoutId, checkoutToken: input.checkoutToken, mediaType: input.mediaType, bytes: decodeImage(input.imageBase64) }); this.events.record({ action: "payment_proof_submitted", outcome: "accepted", resourceId: attempt.publicId }); return { data: { paymentAttemptId: attempt.publicId, status: attempt.status } }; } catch (error) { this.events.record({ action: "payment_proof_submitted", outcome: "denied", resourceId: checkoutId, reasonCode: error instanceof InvalidCheckoutSubmissionError ? "INVALID_OR_EXPIRED_CHECKOUT" : "INVALID_PROOF" }); if (error instanceof InvalidCheckoutSubmissionError) throw new BadRequestException({ code: "INVALID_OR_EXPIRED_CHECKOUT" }); throw new BadRequestException({ code: "INVALID_PROOF" }); }
+    let attempt: PaymentAttempt;
+    try { attempt = await this.submit.execute({ checkoutPublicId: checkoutId, checkoutToken: input.checkoutToken, mediaType: input.mediaType, bytes: decodeImage(input.imageBase64) }); }
+    catch (error) {
+      this.events.record({ action: "payment_proof_submitted", outcome: "denied", resourceId: checkoutId, reasonCode: error instanceof InvalidCheckoutSubmissionError ? "INVALID_OR_EXPIRED_CHECKOUT" : "INVALID_PROOF" });
+      if (error instanceof InvalidCheckoutSubmissionError) throw new BadRequestException({ code: "INVALID_OR_EXPIRED_CHECKOUT" });
+      throw new BadRequestException({ code: "INVALID_PROOF" });
+    }
+    this.events.record({ action: "payment_proof_submitted", outcome: "accepted", resourceId: attempt.publicId });
+    try { await this.extractProof.execute(attempt.id); }
+    catch (error) { this.events.record({ action: "payment_proof_extraction", outcome: "failed", resourceId: attempt.publicId, reasonCode: error instanceof PaymentProofOcrUnavailableError ? "OCR_UNAVAILABLE" : "EXTRACTION_DEFERRED" }); }
+    return { data: { paymentAttemptId: attempt.publicId, status: "processing" } };
   }
 }
 function parse<T>(schema: z.ZodType<T>, value: unknown): T { const result = schema.safeParse(value); if (!result.success) throw new BadRequestException({ code: "INVALID_REQUEST" }); return result.data; }

@@ -58,14 +58,15 @@ export class DrizzleReceivingSourceRepository implements ReceivingSourceReposito
   public async recordTestAlert(source: StoredReceivingSource, alert: ParsedTestAlert): Promise<ReceivingSource> {
     const now = new Date();
     const eventId = randomUUID();
+    const senderIsVerified = normalizeBankIdentity(alert.senderIdentity) === normalizeBankIdentity(source.bankName);
     try {
       await this.database.transaction(async (transaction) => {
         await transaction.insert(alertEvents).values({
           id: eventId, sourceId: source.id, externalEventId: alert.eventId, ingestionChannel: alert.channel,
           senderOrAppIdentityNormalized: normalizeBankIdentity(alert.senderIdentity), receivedAt: alert.receivedAt,
           rawTextEncrypted: this.encryptor.encrypt(alert.rawText), payloadHash: createHash("sha256").update(alert.rawText, "utf8").digest(),
-          parseState: alert.amountMinor === null ? "unparseable" : "parsed", direction: alert.indicatesCredit ? "credit" : "unknown",
-          amountMinor: alert.amountMinor, currency: alert.amountMinor === null ? null : "EGP", parserName: "test-alert-parser", parserVersion: "1", parserConfidence: "1.0000", isTest: true,
+          parseState: alert.amountMinor === null ? "unparseable" : senderIsVerified ? "parsed" : "rejected", direction: senderIsVerified && alert.indicatesCredit ? "credit" : "unknown",
+          amountMinor: alert.amountMinor, currency: alert.amountMinor === null ? null : "EGP", payerNameNormalized: alert.payerNameNormalized, transactionReferenceNormalized: alert.transactionReferenceNormalized, parserName: "test-alert-parser", parserVersion: "1", parserConfidence: "1.0000", isTest: true,
           rawDeleteAt: new Date(now.getTime() + RAW_ALERT_RETENTION_MS), parsedAt: now,
         });
         await transaction.update(receivingSources).set({ channelVerification: encodeChannels(source.channelVerification), status: source.status, testAlertEventId: eventId, lastSeenAt: alert.receivedAt, verifiedAt: source.status === "active" ? now : null, updatedAt: now }).where(eq(receivingSources.id, source.id));
@@ -80,14 +81,15 @@ export class DrizzleReceivingSourceRepository implements ReceivingSourceReposito
   public async recordLiveAlert(source: StoredReceivingSource, alert: ParsedTestAlert): Promise<string> {
     const now = new Date();
     const eventId = randomUUID();
+    const senderIsVerified = normalizeBankIdentity(alert.senderIdentity) === normalizeBankIdentity(source.bankName);
     try {
       await this.database.transaction(async (transaction) => {
         await transaction.insert(alertEvents).values({
           id: eventId, sourceId: source.id, externalEventId: alert.eventId, ingestionChannel: alert.channel,
           senderOrAppIdentityNormalized: normalizeBankIdentity(alert.senderIdentity), receivedAt: alert.receivedAt,
           rawTextEncrypted: this.encryptor.encrypt(alert.rawText), payloadHash: createHash("sha256").update(alert.rawText, "utf8").digest(),
-          parseState: alert.amountMinor === null ? "unparseable" : "parsed", direction: alert.indicatesCredit ? "credit" : "unknown",
-          amountMinor: alert.amountMinor, currency: alert.amountMinor === null ? null : "EGP", parserName: "device-alert-parser", parserVersion: "1", parserConfidence: "1.0000", isTest: false,
+          parseState: alert.amountMinor === null ? "unparseable" : senderIsVerified ? "parsed" : "rejected", direction: senderIsVerified && alert.indicatesCredit ? "credit" : "unknown",
+          amountMinor: alert.amountMinor, currency: alert.amountMinor === null ? null : "EGP", payerNameNormalized: alert.payerNameNormalized, transactionReferenceNormalized: alert.transactionReferenceNormalized, parserName: "device-alert-parser", parserVersion: "1", parserConfidence: "1.0000", isTest: false,
           rawDeleteAt: new Date(now.getTime() + RAW_ALERT_RETENTION_MS), parsedAt: now,
         });
         await transaction.update(receivingSources).set({ lastSeenAt: alert.receivedAt, updatedAt: now }).where(eq(receivingSources.id, source.id));
@@ -108,7 +110,7 @@ export class DrizzleReceivingSourceRepository implements ReceivingSourceReposito
     const rows = await this.database.select().from(alertEvents).where(and(eq(alertEvents.sourceId, sourceId), eq(alertEvents.isTest, true))).orderBy(desc(alertEvents.receivedAt)).limit(10);
     return rows.reverse().flatMap((row) => {
       if (!row.rawTextEncrypted || (row.ingestionChannel !== "sms" && row.ingestionChannel !== "notification")) return [];
-      try { return [{ eventId: row.externalEventId, channel: row.ingestionChannel, senderIdentity: row.senderOrAppIdentityNormalized, rawText: this.encryptor.decrypt(row.rawTextEncrypted), receivedAt: row.receivedAt, amountMinor: row.amountMinor, indicatesCredit: row.direction === "credit" }]; } catch { return []; }
+      try { return [{ eventId: row.externalEventId, channel: row.ingestionChannel, senderIdentity: row.senderOrAppIdentityNormalized, rawText: this.encryptor.decrypt(row.rawTextEncrypted), receivedAt: row.receivedAt, amountMinor: row.amountMinor, indicatesCredit: row.direction === "credit", payerNameNormalized: row.payerNameNormalized, transactionReferenceNormalized: row.transactionReferenceNormalized }]; } catch { return []; }
     });
   }
 

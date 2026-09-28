@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-09-26
+Last updated: 2026-09-27
 
 ## Completed
 
@@ -14,11 +14,14 @@ Last updated: 2026-09-26
 - Added the receiving-source database migration for bank names, multi-channel selection, per-channel verification state, and private test-proof metadata.
 - Replaced development in-memory owner, session, and store adapters with PostgreSQL/Drizzle repositories. Owner sessions are hashed, revocable, and expiry-checked; store webhook values are encrypted before persistence. Added the `owner_sessions` migration.
 - Added global and sensitive-route HTTP rate limits, CSRF-token issuance and enforcement for browser state changes, and structured platform-event/request lifecycle logging with sensitive-value minimization.
+- Implemented merchant-authenticated hosted checkout sessions and the required screenshot-submission flow. A payment attempt and its proof record are created atomically only after the customer submits a valid screenshot; canonical proof images are private, encrypted at rest in object storage, and bounded to 600 KB after re-encoding.
+- Replaced production receiving-source, proof, alert, and replay state with PostgreSQL/Drizzle persistence. Live device alerts are encrypted at rest, idempotent, sender-identity constrained, and recorded in `alert_events` before matching.
+- Implemented deterministic, one-to-one screenshot/alert matching, including exact amount and recipient checks, matching windows, ambiguity handling, alert-first and proof-first ordering, and payer/reference agreement when both evidence sources provide it.
 
 ## In Progress
 
-- Branch: `feat/hosted-checkout-proof-submission`
-- Hosted checkout and proof submission are in progress: a merchant-authenticated API creates a durable checkout session, while the customer screenshot submission is the only operation that creates a payment attempt. No merge into `main` is authorized.
+- Branch: `feat/payment-proof-ocr-extraction`
+- Payment-proof OCR is being connected to the durable matching flow. Azure Vision extraction records only compact encrypted facts; raw OCR text is neither persisted nor logged. No merge into `main` is authorized.
 
 ## Verification
 
@@ -27,10 +30,12 @@ Last updated: 2026-09-26
 - Receiving-source verification: server typecheck, Vitest suite (14 tests), production build, and whitespace checks passed.
 - PostgreSQL persistence: server typecheck, Vitest suite (16 tests), production build, whitespace checks, and a temporary server health smoke test passed. Database migration remains unapplied because no approved database environment is configured locally.
 - HTTP security and observability: server typecheck, Vitest suite (19 tests), production build, whitespace checks, and a temporary smoke test passed (CSRF rejection, token-authorized request, and OTP rate limit).
+- Hosted checkout, receiving-source persistence, matching, and OCR extraction: server typecheck, Vitest suite (33 tests), production build, whitespace checks, and a source-level secret scan passed. Database migrations remain unapplied because no approved database environment is configured locally.
 
 ## Pending
 
 - Configure an approved database and encryption-key source for a shared or production environment.
-- Wire the existing in-memory receiving-source adapter to PostgreSQL/S3/BullMQ before deployment; live test screenshots require `AZURE_VISION_ENDPOINT` and `AZURE_VISION_KEY`.
+- Configure Azure Vision credentials (`AZURE_VISION_ENDPOINT` and `AZURE_VISION_KEY`) and use a durable worker/retry queue for OCR, matching, expiry, malware scanning, and callbacks before production deployment.
 - Configure the private S3-compatible bucket, its server-side encryption and lifecycle policy, and `HOSTED_CHECKOUT_ORIGIN` before accepting live checkout proofs.
+- Implement signed merchant webhook delivery/retries, exception/dashboard APIs, and the production malware-scanning and short-lived direct-upload path.
 - Iteration 2: support multiple stores sharing an IPA through a shared receiving-source model and cross-store, uniqueness-only matching.
